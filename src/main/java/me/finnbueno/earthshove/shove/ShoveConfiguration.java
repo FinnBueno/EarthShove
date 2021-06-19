@@ -9,6 +9,7 @@ import me.finnbueno.earthshove.util.ConfigValue;
 import me.finnbueno.earthshove.util.PotionConfiguration;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.util.Vector;
 
@@ -36,11 +37,13 @@ public abstract class ShoveConfiguration {
 		EarthAbility.playEarthbendingSound(location);
 	}
 
-	public void apply(LivingEntity target, CoreAbility cause) {
-		potionEffects.forEach(pe -> pe.apply(target));
-		DamageHandler.damageEntity(target, damage, cause);
+	public void apply(Entity target, CoreAbility cause) {
 		Vector away = GeneralMethods.getDirection(cause.getPlayer().getLocation(), target.getLocation());
 		away.setY(away.getY() + .15);
 		target.setVelocity(target.getVelocity().add(away.multiply(knockback)));
+		if (target instanceof LivingEntity) {
+			potionEffects.forEach(pe -> pe.apply((LivingEntity) target));
+			DamageHandler.damageEntity(target, damage, cause);
+		}
 	}
 }

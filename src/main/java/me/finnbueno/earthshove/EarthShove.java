@@ -20,6 +20,7 @@ import org.bukkit.Location;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.permissions.Permission;
@@ -41,6 +42,8 @@ public class EarthShove extends EarthAbility implements AddonAbility, ComboAbili
 		PotionConfiguration.class, new PotionConfigurationAdapter()
 	);
 
+	private Permission perm;
+
 	private static Map<ShoveType, ShoveConfiguration> SHOVE_TYPES = Arrays.stream(ShoveType.values())
 		.collect(Collectors.toMap(Function.identity(), ShoveType::getConfig));
 
@@ -53,12 +56,17 @@ public class EarthShove extends EarthAbility implements AddonAbility, ComboAbili
 	@ConfigValue
 	private static int MAX_HILL = 2;
 
+	private static final double RADIUS_STEP = .5;
+
 	private final ShoveConfiguration shove;
 	private final Block source;
-	private Permission perm;
+	private double radius;
+	private final Set<Entity> affectedEntities;
 
 	public EarthShove(Player player) {
 		super(player);
+		this.radius = RADIUS_STEP;
+		this.affectedEntities = new HashSet<>();
 		this.source = player.getLocation().getBlock().getRelative(BlockFace.DOWN);
 		this.shove = findType();
 
@@ -74,22 +82,41 @@ public class EarthShove extends EarthAbility implements AddonAbility, ComboAbili
 			return;
 		}
 
-		performMove();
+		start();
 	}
 
-	private void performMove() {
-		this.shove.playSound(getLocation());
+	public void progress() {
+		if (!bPlayer.canBendIgnoreBinds(this)) {
+			remove();
+			return;
+		}
+
+		if (this.radius % 1 == 0) {
+			this.shove.playSound(getLocation());
+		}
+
 		playParticles();
-		GeneralMethods.getEntitiesAroundPoint(player.getLocation(), RANGE).stream()
+
+		GeneralMethods.getEntitiesAroundPoint(player.getLocation(), this.radius).stream()
 			.filter(e -> e instanceof LivingEntity)
 			.filter(e -> e.getUniqueId() != player.getUniqueId())
-			.map(e -> (LivingEntity) e)
-			.filter(e -> {
-				double angle = determineAngle(e);
-				System.out.println("Angle: " + angle);
-				return angle <= MAX_ANGLE;
-			})
-			.forEach(e -> this.shove.apply(e, this));
+			.filter(e -> !affectedEntities.contains(e))
+			.filter(e -> determineAngle(e) <= MAX_ANGLE)
+			.forEach(e -> {
+				affectedEntities.add(e);
+				this.shove.apply(e, this);
+			});
+
+		this.radius += RADIUS_STEP;
+		if (this.radius > RANGE) {
+			remove();
+		}
+	}
+
+	@Override
+	public void remove() {
+		super.remove();
+		bPlayer.addCooldown(this);
 	}
 
 	private void playParticles() {
@@ -98,17 +125,15 @@ public class EarthShove extends EarthAbility implements AddonAbility, ComboAbili
 		double halfAngle = MAX_ANGLE / 2.0;
 		double angleStep = 45;
 		double yaw = player.getLocation().getYaw() + 90;
-		for (double r = .5; r <= RANGE; r += .5) {
-			for (double angle = yaw - halfAngle; angle < yaw + halfAngle; angle += angleStep / r) {
-				double radians = Math.toRadians(angle);
-				double x = Math.cos(radians) * r;
-				double z = Math.sin(radians) * r;
-				Location loc = player.getLocation().add(x, heightStep * r, z);
-				if (!bringToGround(loc)) {
-					continue;
-				}
-				ParticleEffect.BLOCK_CRACK.display(loc, 5, 0.15, 0.05, 0.15, this.source.getBlockData());
+		for (double angle = yaw - halfAngle; angle < yaw + halfAngle; angle += angleStep / this.radius) {
+			double radians = Math.toRadians(angle);
+			double x = Math.cos(radians) * radius;
+			double z = Math.sin(radians) * radius;
+			Location loc = player.getLocation().add(x, heightStep * radius, z);
+			if (!bringToGround(loc)) {
+				continue;
 			}
+			ParticleEffect.BLOCK_CRACK.display(loc, 5, 0.15, 0.05, 0.15, this.source.getBlockData());
 		}
 	}
 
@@ -147,7 +172,7 @@ public class EarthShove extends EarthAbility implements AddonAbility, ComboAbili
 		return true;
 	}
 
-	private double determineAngle(LivingEntity e) {
+	private double determineAngle(Entity e) {
 		Vector toTarget = GeneralMethods.getDirection(player.getLocation(), e.getLocation()).normalize();
 		return Math.toDegrees(player.getLocation().getDirection().angle(toTarget));
 	}
@@ -159,10 +184,6 @@ public class EarthShove extends EarthAbility implements AddonAbility, ComboAbili
 					sc.canUse(bPlayer) &&
 					sc.isMaterialValid(this.source.getType())
 			).findFirst().orElse(null);
-	}
-
-	public void progress() {
-
 	}
 
 	public boolean isSneakAbility() {
@@ -255,13 +276,14 @@ public class EarthShove extends EarthAbility implements AddonAbility, ComboAbili
 		if (value instanceof Collection) {
 			return ((Collection<?>)value).stream().map(o -> handleConfigValue(o, typeList)).collect(Collectors.toList());
 		} else if (ADAPTERS.containsKey(type)) {
-			ConfigAdapter ca = ADAPTERS.get(type);
+			ConfigAdapter<?> ca = ADAPTERS.get(type);
 			return ca.build(value);
 		} else {
 			return value;
 		}
 	}
 
+	@SuppressWarnings({"rawtypes", "unchecked"})
 	private Object handleDefaultValue(Object value, LinkedList<Class<?>> typeList) {
 		typeList.addLast(value.getClass());
 		if (value instanceof Collection) {
@@ -292,7 +314,7 @@ public class EarthShove extends EarthAbility implements AddonAbility, ComboAbili
 	}
 
 	public String getVersion() {
-		return "1.0.0";
+		return "1.1.0";
 	}
 
 	public Object createNewComboInstance(Player player) {
