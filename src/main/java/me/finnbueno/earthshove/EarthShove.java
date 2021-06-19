@@ -82,11 +82,12 @@ public class EarthShove extends EarthAbility implements AddonAbility, ComboAbili
 			return;
 		}
 
+		bPlayer.addCooldown(this);
 		start();
 	}
 
 	public void progress() {
-		if (!bPlayer.canBendIgnoreBinds(this)) {
+		if (!bPlayer.canBendIgnoreBindsCooldowns(this)) {
 			remove();
 			return;
 		}
@@ -111,12 +112,6 @@ public class EarthShove extends EarthAbility implements AddonAbility, ComboAbili
 		if (this.radius > RANGE) {
 			remove();
 		}
-	}
-
-	@Override
-	public void remove() {
-		super.remove();
-		bPlayer.addCooldown(this);
 	}
 
 	private void playParticles() {
