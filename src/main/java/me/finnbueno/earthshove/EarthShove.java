@@ -16,6 +16,7 @@ import me.finnbueno.earthshove.shove.ShoveConfiguration;
 import me.finnbueno.earthshove.shove.ShoveType;
 import me.finnbueno.earthshove.util.PotionConfiguration;
 import me.finnbueno.earthshove.util.PotionConfigurationAdapter;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
@@ -204,6 +205,7 @@ public class EarthShove extends EarthAbility implements AddonAbility, ComboAbili
 	public void load() {
 		perm = new Permission("bending.ability." + getName());
 		perm.setDefault(PermissionDefault.TRUE);
+		Bukkit.getServer().getPluginManager().addPermission(perm);
 
 		String basePath = String.format("ExtraAbilities.%s.%s.%s.", getAuthor(), getElement().getName(), getName());
 		Config config = ConfigManager.defaultConfig;
@@ -309,7 +311,7 @@ public class EarthShove extends EarthAbility implements AddonAbility, ComboAbili
 	}
 
 	public String getVersion() {
-		return "1.1.0";
+		return "1.1.1";
 	}
 
 	public Object createNewComboInstance(Player player) {
